@@ -32,6 +32,9 @@
 // If you change the default XBee baud, update it here
 #define XBEE_BAUD 9600
 
+// Number of milliseconds between transmission bursts
+#define XMIT_DELAY 20
+
 // Pin connections
 const int VERTICAL_PIN = 3;
 const int HORIZONTAL_PIN = 4;
@@ -39,6 +42,10 @@ const int XBEE_RX = 0;
 const int XBEE_TX = 1;
 
 // Global variables
+int vertical;
+int horizontal;
+int8_t remapped_vertical;
+int8_t remapped_horizontal;
 SoftwareSerial xbee(XBEE_RX, XBEE_TX);
 
 void setup() {
@@ -54,11 +61,6 @@ void setup() {
 }
 
 void loop() {
-  
-  int vertical;
-  int horizontal;
-  int8_t remapped_vertical;
-  int8_t remapped_horizontal;
   
   // Read values from joystick
   vertical = analogRead(VERTICAL_PIN);
@@ -95,8 +97,9 @@ void loop() {
   remapped_horizontal = map(horizontal, 0, 1023, -100, 100);
   
   // Transmit values over XBee
-  xbee.print('X');
-  xbee.print(remapped_vertical);
-  xbee.print(remapped_horizontal);
-
+  xbee.write(remapped_vertical);
+  xbee.write(remapped_horizontal);
+  
+  // Wait 20ms between transmission bursts
+  delay(XMIT_DELAY);
 }

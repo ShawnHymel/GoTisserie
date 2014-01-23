@@ -8,6 +8,8 @@
  *
  * Arduino    Hardware
  * ----------------------
+ *   Rx       XBee Rx
+ *   Tx       XBee Tx
  *   5        Servo input
  *   6        PWMA (TB6612FNG)
  *   8        AIN1 (TB6612FNG)
@@ -16,14 +18,20 @@
  */
  
 #include <Servo.h>
-#include <SoftwareSerial.h>
+
+/***************************************************************
+ * Globals
+ **************************************************************/
+// Useful for debugging on the Arduino Mega 2560
+#define DEBUG 1
 
 // If you change the default XBee baud, update it here
 #define XBEE_BAUD 9600
 
+// Number of milliseconds between tranmission bursts
+#define XMIT_DELAY 20
+
 // Pins
-const int XBEE_RX = 0;
-const int XBEE_TX = 1;
 const int SERVO_PIN = 5;
 const int PWMA = 6;
 const int AIN1 = 8;
@@ -31,19 +39,25 @@ const int AIN2 = 9;
 const int STBY = 10;
 
 // Global variables
-Servo servo;
-int pos = 0;
 int state = 0;
-SoftwareSerial xbee(XBEE_RX, XBEE_TX);
+int8_t vertical = 0;
+int8_t horizontal = 0;
+int8_t pos;
+unsigned long start_time;
+Servo servo;
 
-// Setup
+/***************************************************************
+ * Setup
+ **************************************************************/
 void setup() {
   
-  // ***TEST
-  Serial.begin(9600);
+  // Initialize alternate serial for debugging
+#if DEBUG == 1
+  Serial1.begin(9600);
+#endif
   
   // Initialize XBee
-  xbee.begin(XBEE_BAUD);
+  Serial.begin(XBEE_BAUD);
   
   // Set pin modes
   pinMode(STBY, OUTPUT);
@@ -53,49 +67,49 @@ void setup() {
   
   // Initialize servo
   servo.attach(SERVO_PIN);
+  servo.write(90);
+  
 }
 
-// Main loop
+/***************************************************************
+ * Main Loop
+ **************************************************************/
 void loop() {
   
-  // Determine position for servo
-  switch (state) {
-  case 0:
-    pos = 1;
-    state = 1;
-    break;
-  case 1:
-    pos = 90;
-    state = 2;
-    break;
-  case 2:
-    pos = 179;
-    state = 3;
-    break;
-  case 3:
-    pos = 90;
-    state = 0;
-    break;
-  default:
-    break;
+  // Wait to get 2 bytes from XBee
+  start_time = millis();
+  while ( (Serial.available() < 2) && 
+          ((millis() - start_time) < XMIT_DELAY) ) {
   }
   
-  // Set servo at desired position
+  // Flush buffer if less than 2 bytes received, otherwise read
+  if ( Serial.available() < 2 ) {
+    Serial.flush();
+  } else {
+    vertical = Serial.read();
+    horizontal = Serial.read();
+    Serial.flush();
+  }
+  
+  // Set motor speed
+  
+  //Re-map horizontal values to servo position and set servo
+  pos = map(horizontal, -100, 100, 1, 179);
   servo.write(pos);
   
-  // Motor full speed, forward
-  move(255, 1);
-  delay(1000);
-  stop();
-  delay(250);
+  // Print received values to alternate serial for debugging
+#if DEBUG == 1
+  Serial1.print("V: ");
+  Serial1.print(vertical, DEC);
+  Serial1.print(" | POS: ");
+  Serial1.println(pos, DEC);
+#endif
   
-  // Motor half speed, backward
-  move(255, 0);
-  delay(1000);
-  stop();
-  delay(250);
 }
 
+/****************************************************************
+ * Functions
+ ***************************************************************/
 // Move motor A at a speed and direction
 void move(int spd, int dir) {
   
